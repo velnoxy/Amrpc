@@ -1,0 +1,69 @@
+
+name: Build AMRPC APK
+
+on:
+  push:
+    paths:
+      - ".github/workflows/build.yml"
+      - "amrpc.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+
+          with zipfile.ZipFile("amrpc.zip") as archive:
+              for entry in archive.infolist():
+                  path = Path(entry.filename)
+                  if (
+                      path.is_absolute()
+                      or ".." in path.parts
+                      or path.parts[0] != "amrpc"
+                  ):
+                      raise ValueError("Unsafe archive path")
+                  if entry.external_attr >> 16 & 0o170000 == 0o120000:
+                      raise ValueError("Symlinks not allowed")
+              archive.extractall(".")
+
+          print("Project extracted successfully")
+          PY
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build Debug APK
+        working-directory: amrpc
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: amrpc-debug-apk
+          path: amrpc/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
