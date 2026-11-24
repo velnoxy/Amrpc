@@ -48,15 +48,26 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: true
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
-            
+      - name: Install Android components
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+
+          SDKMGR=$(ls -d "${ANDROID_HOME}"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "${SDKMGR}" ]; then
+            echo "sdkmanager not found on runner"
+            exit 1
+          fi
+          echo "Using ${SDKMGR}"
+
+          mkdir -p "${ANDROID_HOME}/licenses"
+          printf "\n24333f8a63b6825ea Becf4147559D29A54E5F00A5\n" > "${ANDROID_HOME}/licenses/android-sdk-license"
+          printf "\n84831b9409646a918E34935899E76F2C21B742D3\n" > "${ANDROID_HOME}/licenses/android-sdk-preview-license"
+
+          yes "${SDKMGR}" --licenses > /dev/null 2>&1 || true
+
+          "${SDKMGR}" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -64,6 +75,7 @@ jobs:
 
       - name: Build Debug APK
         working-directory: amrpc
+        shell: bash
         run: |
           if [ -x ./gradlew ]; then
             chmod +x ./gradlew
